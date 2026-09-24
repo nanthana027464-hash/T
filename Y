@@ -1,0 +1,142 @@
+-- ⚠️ สำหรับการศึกษาเท่านั้น | มีความเสี่ยงถูกแบน
+-- โหลดไลบรารี Rayfield (ต้องใช้แหล่งที่ถูกต้องเอง)
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shield-ui/Rayfield/main/source.lua'))()
+
+-- สร้างหน้าต่างหลัก
+local Window = Rayfield:CreateWindow({
+    Name = "ระบบปรับแต่งครบชุด",
+    LoadingTitle = "กำลังโหลดระบบ...",
+    LoadingSubtitle = "รอสักครู่",
+    ConfigurationSaving = { Enabled = true, FolderName = "MyConfig" }
+})
+
+-- ============== ตัวแปรควบคุมทั้งหมด ==============
+local Settings = {
+    Speed = { Enabled = false, Value = 16 },
+    AutoPickup = { Enabled = false, Range = 20 },
+    AutoClick = { Enabled = false, Speed = 0.001 }, -- 1 มิลลิวินาที
+    AntiAFK = { Enabled = false },
+    FPS = { Enabled = false, Target = 60 }
+}
+
+-- ============== สร้างแท็บเมนู ==============
+local MainTab = Window:CreateTab("ฟีเจอร์หลัก")
+local VisualTab = Window:CreateTab("การแสดงผล")
+
+-- ---------- ปรับความเร็ววิ่ง ----------
+MainTab:CreateToggle({
+    Name = "เปิดใช้ความเร็ววิ่ง",
+    CurrentValue = false,
+    Callback = function(Value) Settings.Speed.Enabled = Value end
+})
+
+MainTab:CreateSlider({
+    Name = "ค่าความเร็ว",
+    Min = 10,
+    Max = 200,
+    Default = 16,
+    Callback = function(Value) Settings.Speed.Value = Value end
+})
+
+-- ---------- หยิบไข่อัตโนมัติ ----------
+MainTab:CreateToggle({
+    Name = "เปิดหยิบไข่อัตโนมัติ",
+    CurrentValue = false,
+    Callback = function(Value) Settings.AutoPickup.Enabled = Value end
+})
+
+MainTab:CreateSlider({
+    Name = "ระยะค้นหา (หน่วย)",
+    Min = 5,
+    Max = 100,
+    Default = 20,
+    Callback = function(Value) Settings.AutoPickup.Range = Value end
+})
+
+-- ---------- ออโต้คลิก 1 มิลลิวินาที ----------
+MainTab:CreateToggle({
+    Name = "เปิดออโต้คลิก (1มิลลิวิ)",
+    CurrentValue = false,
+    Callback = function(Value)
+        Settings.AutoClick.Enabled = Value
+        -- ลูปคลิกเมื่อเปิดใช้
+        while Settings.AutoClick.Enabled do
+            task.wait(Settings.AutoClick.Speed)
+            -- จำลองการคลิกเมาส์ (ขึ้นอยู่กับตัวรันสคริปต์)
+            pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, true, game:GetService("Players").LocalPlayer, 1) end)
+            pcall(function() game:GetService("VirtualInputManager"):SendMouseButtonEvent(0, 0, 0, false, game:GetService("Players").LocalPlayer, 1) end)
+        end
+    end
+})
+
+-- ---------- Anti AFK ----------
+MainTab:CreateToggle({
+    Name = "เปิดระบบป้องกัน AFK",
+    CurrentValue = false,
+    Callback = function(Value) Settings.AntiAFK.Enabled = Value end
+})
+
+-- ---------- ปรับ FPS ----------
+VisualTab:CreateToggle({
+    Name = "จำกัด FPS",
+    CurrentValue = false,
+    Callback = function(Value) Settings.FPS.Enabled = Value end
+})
+
+VisualTab:CreateSlider({
+    Name = "เป้าหมาย FPS",
+    Min = 30,
+    Max = 240,
+    Default = 60,
+    Callback = function(Value) Settings.FPS.Target = Value end
+})
+
+-- ============== ลูปทำงานหลัก (รันทุกเฟรม) ==============
+game:GetService("RunService").RenderStepped:Connect(function()
+    local Player = game:GetService("Players").LocalPlayer
+    local Character = Player.Character
+    if not Character then return end
+    local Humanoid = Character:FindFirstChildWhichIsA("Humanoid")
+    local HRP = Character:FindFirstChild("HumanoidRootPart")
+    if not Humanoid or not HRP then return end
+
+    -- ✅ ปรับความเร็ว
+    if Settings.Speed.Enabled then
+        Humanoid.WalkSpeed = Settings.Speed.Value
+    end
+
+    -- ✅ หยิบไข่อัตโนมัติ
+    if Settings.AutoPickup.Enabled then
+        for _, Obj in pairs(workspace:GetDescendants()) do
+            if Obj:IsA("Part") and (Obj.Name:lower():find("egg") or Obj.Name == "ไข่") then
+                -- คำนวณระยะทาง
+                if (HRP.Position - Obj.Position).Magnitude <= Settings.AutoPickup.Range then
+                    -- เรียกใช้พรอมต์เก็บของ
+                    local Prompt = Obj:FindFirstChildOfClass("ProximityPrompt")
+                    if Prompt and not Prompt.Enabled then Prompt.Enabled = true end
+                    if Prompt then fireproximityprompt(Prompt) end
+                end
+            end
+        end
+    end
+
+    -- ✅ Anti AFK (ขยับเล็กน้อยเพื่อไม่ให้โดนเตะ)
+    if Settings.AntiAFK.Enabled then
+        pcall(function()
+            game:GetService("VirtualUser"):SetCameraRotation(CFrame.Angles(math.rad(0.1), 0, 0))
+        end)
+    end
+
+    -- ✅ ควบคุม FPS
+    if Settings.FPS.Enabled then
+        -- จำกัดความถี่การเรนเดอร์ตามเป้าหมาย
+        task.wait(1/Settings.FPS.Target)
+    end
+end)
+
+-- ✅ ฟีเจอร์รันติด: เพียงบันทึกโค้ดนี้ลงในไฟล์ .lua แล้วตั้งค่าในตัวรันสคริปต์ให้โหลดอัตโนมัติ
+Rayfield:Notify({
+    Title = "ระบบพร้อมทำงาน",
+    Content = "ฟีเจอร์ทั้งหมดเปิดใช้งานได้แล้ว",
+    Duration = 3
+})
